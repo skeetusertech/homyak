@@ -4,7 +4,6 @@ from ..config import PROMO_DB_PATH
 async def init_db():
     db_path = str(PROMO_DB_PATH)
     async with aiosqlite.connect(db_path) as db:
-        # Основная таблица промокодов
         await db.execute("""
             CREATE TABLE IF NOT EXISTS promocodes (
                 code TEXT PRIMARY KEY,

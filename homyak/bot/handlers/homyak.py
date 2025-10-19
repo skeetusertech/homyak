@@ -1,4 +1,3 @@
-# bot/handlers/homyak.py
 from aiogram import Router, F
 from aiogram.types import Message, FSInputFile
 from datetime import datetime, timedelta
@@ -112,8 +111,8 @@ async def handle_homyak(message: Message):
     caption = "\n".join(caption_lines)
 
     await message.answer_photo(photo=FSInputFile(chosen), caption=caption, reply_to_message_id=message.message_id)
-
-    await notify_homyak_found(message.bot, user, homyak_name)
+    chat_type = "Личка" if message.chat.type == "private" else "Группа"
+    await notify_homyak_found(message.bot, user, homyak_name, chat_type)
 
     if not is_premium:
         if random.random() < 0.3:
@@ -123,7 +122,7 @@ async def handle_homyak(message: Message):
             )
 
 async def send_homyak_by_name(message: Message, homyak_name: str):
-    print(f"Получено имя хомяка: {homyak_name}")  # Отладка
+    print(f"Получено имя хомяка: {homyak_name}")
     user = message.from_user
     user_id = user.id
 

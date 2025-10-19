@@ -19,14 +19,15 @@ async def notify_new_user(bot: Bot, user: User):
     except Exception as e:
         logger.error(f"cant send log found new user: {e}")
 
-async def notify_homyak_found(bot: Bot, user: User, homyak_name: str):
+async def notify_homyak_found(bot: Bot, user: User, homyak_name: str, chat_type: str):
     full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Без имени"
     username = f"@{user.username}" if user.username else "нет"
     text = (
         f"🐹 Выпадение хомяка\n"
         f"Пользователь: {full_name} ({username})\n"
         f"ID: {user.id}\n"
-        f"Хомяк: {homyak_name}"
+        f"Хомяк: {homyak_name}\n"
+        f"Источник: {chat_type}"
     )
     try:
         await bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
