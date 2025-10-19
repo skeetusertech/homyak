@@ -1,9 +1,10 @@
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.filters import Command
-from ..database.promo import get_promo, use_promo, is_promo_valid
+from ..database.promo import redeem_promo
 from ..database.scores import add_score
 from ..database.cooldowns import reset_cooldown
+import aiosqlite
 from ..admin_logs.logger import notify_promo_used
 
 router = Router()
@@ -22,21 +23,21 @@ async def cmd_promo(message: Message):
     else:
         code = text[6:].strip()
 
-    if not await is_promo_valid(code):
+    user_id = message.from_user.id
+
+    promo, status = await redeem_promo(user_id, code)
+
+    if status in {"not_found", "exhausted"}:
         await message.answer("❌ Промокод недействителен или исчерпан.")
         return
 
-    user_id = message.from_user.id
-    
-    from ..database.promo import has_user_used_promo
-    if await has_user_used_promo(user_id, code):
+    if status == "already_used":
         await message.answer("❌ Вы уже активировали этот промокод.")
         return
 
-    promo = await get_promo(code)
-
-    promo = await get_promo(code)
-    user_id = message.from_user.id
+    if status != "success" or promo is None:
+        await message.answer("❌ Не удалось активировать промокод. Попробуйте позже.")
+        return
 
     if promo["reward_type"] == 1: 
         points = int(promo["reward_value"])
@@ -63,11 +64,14 @@ async def cmd_promo(message: Message):
         reward_type=promo["reward_type"],
         reward_value=promo["reward_value"],
         creator_id=promo["creator_id"],
-        remaining_uses=promo["max_uses"] - promo["used_count"] - 1
+        remaining_uses=max(0, promo["max_uses"] - promo["used_count"])
     )
-
-    from ..database.promo import record_promo_use
-    await record_promo_use(user_id, code)
-    await use_promo(code) 
     if promo["reward_type"] != 2:
         await message.answer(result_text)
+
+
+async def promo_exists(code: str) -> bool:
+    norm = code.strip().upper()
+    async with aiosqlite.connect("your.db") as db:
+        cur = await db.execute("SELECT 1 FROM promocodes WHERE code = ? LIMIT 1", (norm,))
+        return await cur.fetchone() is not None

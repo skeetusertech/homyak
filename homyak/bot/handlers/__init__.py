@@ -5,4 +5,11 @@ from .premium import router as premium_router
 from .bonus import router as bonus_router
 from .promo import router as promo_router
 
-routers = [promo_router, premium_router, bonus_router, profile_router, start_router, homyak_router]
+routers = [
+    promo_router,
+    premium_router,
+    bonus_router,
+    profile_router,
+    start_router,
+    homyak_router,
+]

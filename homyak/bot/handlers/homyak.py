@@ -171,4 +171,6 @@ async def send_homyak_by_name(message: Message, homyak_name: str):
     await message.answer_photo(photo=FSInputFile(file_path), caption=caption, reply_to_message_id=message.message_id)
 
     from ..admin_logs.logger import notify_homyak_found
-    await notify_homyak_found(message.bot, user, homyak_name)
+    chat_type = "Личка" if message.chat.type == "private" else "Группа"
+    chat_name = message.chat.title if message.chat.type != "private" else "Личка"
+    await notify_homyak_found(message.bot, user, homyak_name, f"{chat_type} ({chat_name})")

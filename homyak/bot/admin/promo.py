@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from pathlib import Path
 from ..database.admins import is_admin
 import re
-from ..database.promo import create_promo
+from ..database.promo import create_promo, promo_exists
 
 router = Router()
 
@@ -30,6 +30,11 @@ async def cmd_createpromo(message: Message, state: FSMContext):
 @router.message(PromoCreation.waiting_for_code)
 async def process_code(message: Message, state: FSMContext):
     code = message.text.strip()
+    norm = code.upper()
+    if await promo_exists(norm):
+        await message.answer("❌ Такой промокод уже существует. Введите другой:")
+        return
+    await state.update_data(promo_code=norm)
     if not code:
         await message.answer("❌ Промокод не может быть пустым.")
         return
