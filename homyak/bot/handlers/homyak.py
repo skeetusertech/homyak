@@ -112,7 +112,8 @@ async def handle_homyak(message: Message):
 
     await message.answer_photo(photo=FSInputFile(chosen), caption=caption, reply_to_message_id=message.message_id)
     chat_type = "Личка" if message.chat.type == "private" else "Группа"
-    await notify_homyak_found(message.bot, user, homyak_name, chat_type)
+    chat_name = message.chat.title if message.chat.type != "private" else "Личка"
+    await notify_homyak_found(message.bot, user, homyak_name, f"{chat_type} ({chat_name})")
 
     if not is_premium:
         if random.random() < 0.3:

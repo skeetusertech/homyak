@@ -1,6 +1,7 @@
 from aiogram import Bot
-from aiogram.types import User
-from ..config import ADMIN_CHAT_ID
+from aiogram.types import User, FSInputFile
+from pathlib import Path
+from ..config import HOMYAK_FILES_DIR, ADMIN_CHAT_ID
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ async def notify_new_user(bot: Bot, user: User):
 async def notify_homyak_found(bot: Bot, user: User, homyak_name: str, chat_type: str):
     full_name = f"{user.first_name or ''} {user.last_name or ''}".strip() or "Без имени"
     username = f"@{user.username}" if user.username else "нет"
+    
     text = (
         f"🐹 Выпадение хомяка\n"
         f"Пользователь: {full_name} ({username})\n"
@@ -29,8 +31,19 @@ async def notify_homyak_found(bot: Bot, user: User, homyak_name: str, chat_type:
         f"Хомяк: {homyak_name}\n"
         f"Источник: {chat_type}"
     )
+    
+    filename = f"{homyak_name}.png"
+    file_path = HOMYAK_FILES_DIR / filename
+
     try:
-        await bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
+        if file_path.exists():
+            await bot.send_photo(
+                chat_id=ADMIN_CHAT_ID,
+                photo=FSInputFile(file_path),
+                caption=text
+            )
+        else:
+            await bot.send_message(chat_id=ADMIN_CHAT_ID, text=text)
     except Exception as e:
         logger.error(f"cant send log found homyak: {e}")
 
