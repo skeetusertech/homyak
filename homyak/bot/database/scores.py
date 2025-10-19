@@ -19,9 +19,18 @@ async def init_db():
         if "last_homyak" not in column_names:
             await db.execute("ALTER TABLE user_scores ADD COLUMN last_homyak TEXT")
 
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS chat_user_scores (
+                chat_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                total_score INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (chat_id, user_id)
+            )
+        """)
+
         await db.commit()
 
-async def add_score(user_id: int, points: int, homyak_name: str = None):
+async def add_score(user_id: int, points: int, homyak_name: str = None, chat_id: int | None = None):
     db_path = str(SCORES_DB_PATH)
     async with aiosqlite.connect(db_path) as db:
         if homyak_name:
@@ -38,6 +47,15 @@ async def add_score(user_id: int, points: int, homyak_name: str = None):
                 VALUES (?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET total_score = total_score + excluded.total_score
             """, (user_id, points))
+
+        if chat_id is not None:
+            await db.execute("""
+                INSERT INTO chat_user_scores (chat_id, user_id, total_score)
+                VALUES (?, ?, ?)
+                ON CONFLICT(chat_id, user_id) DO UPDATE SET
+                    total_score = total_score + excluded.total_score
+            """, (chat_id, user_id, points))
+
         await db.commit()
 
 async def get_score(user_id: int) -> tuple[int, str | None]:
@@ -56,11 +74,20 @@ async def get_top_scores_in_chat(chat_id: int, limit: int = 10):
     db_path = str(SCORES_DB_PATH)
     async with aiosqlite.connect(db_path) as db:
         cursor = await db.execute("""
-            SELECT user_id, total_score FROM user_scores 
-            ORDER BY total_score DESC 
+            SELECT user_id, total_score FROM chat_user_scores
+            WHERE chat_id = ?
+            ORDER BY total_score DESC
             LIMIT ?
-        """, (limit,))
+        """, (chat_id, limit))
         score_rows = await cursor.fetchall()
+
+        if not score_rows:
+            cursor = await db.execute("""
+                SELECT user_id, total_score FROM user_scores
+                ORDER BY total_score DESC
+                LIMIT ?
+            """, (limit,))
+            score_rows = await cursor.fetchall()
 
     if not score_rows:
         return []
