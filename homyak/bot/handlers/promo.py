@@ -68,10 +68,3 @@ async def cmd_promo(message: Message):
     )
     if promo["reward_type"] != 2:
         await message.answer(result_text)
-
-
-async def promo_exists(code: str) -> bool:
-    norm = code.strip().upper()
-    async with aiosqlite.connect("your.db") as db:
-        cur = await db.execute("SELECT 1 FROM promocodes WHERE code = ? LIMIT 1", (norm,))
-        return await cur.fetchone() is not None
