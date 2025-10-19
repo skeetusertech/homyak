@@ -45,11 +45,22 @@ async def process_code(message: Message, state: FSMContext):
 
 @router.message(PromoCreation.waiting_for_type)
 async def process_type(message: Message, state: FSMContext):
+    attempts = await state.get_data()
+    failed_attempts = attempts.get("failed_attempts", 0)
+
     try:
         reward_type = int(message.text.strip())
         if reward_type not in [1, 2, 3, 4]:
             raise ValueError
     except ValueError:
+        failed_attempts += 1
+        await state.update_data(failed_attempts=failed_attempts)
+
+        if failed_attempts >= 3:
+            await state.clear()
+            await message.answer("❌ Три неудачные попытки. Пожалуйста, начните процесс заново.")
+            return
+
         await message.answer("❌ Введите число от 1 до 4.")
         return
 
@@ -71,16 +82,27 @@ async def process_type(message: Message, state: FSMContext):
 @router.message(PromoCreation.waiting_for_value)
 async def process_value(message: Message, state: FSMContext):
     data = await state.get_data()
-    reward_type = data["reward_type"]
+    reward_type = data.get("reward_type")
+    attempts = await state.get_data()
+    failed_attempts = attempts.get("failed_attempts", 0)
 
-    if reward_type == 1:  # <<< очки 
+    if reward_type == 1:
         try:
             points = int(message.text.strip())
             if points <= 0:
                 raise ValueError
         except ValueError:
+            failed_attempts += 1
+            await state.update_data(failed_attempts=failed_attempts)
+
+            if failed_attempts >= 3:
+                await state.clear()
+                await message.answer("❌ Три неудачные попытки. Пожалуйста, начните процесс заново.")
+                return
+
             await message.answer("❌ Введите положительное число.")
             return
+        
         await state.update_data(reward_value=str(points))
         await message.answer("🔢 Сколько активаций максимум?")
         await state.set_state(PromoCreation.waiting_for_max_uses)
@@ -110,14 +132,26 @@ async def process_value(message: Message, state: FSMContext):
         await message.answer("🔍 Найдено несколько хомяков:", reply_markup=keyboard)
         await state.set_state(PromoCreation.waiting_for_homyak_selection)
 
-    elif reward_type == 4: # <<< множитель очков за хъомяка
+    elif reward_type == 4:
+        attempts = await state.get_data()
+        failed_attempts = attempts.get("failed_attempts", 0)
+
         try:
             bonus_points = int(message.text.strip())
             if bonus_points <= 0:
                 raise ValueError
         except ValueError:
+            failed_attempts += 1
+            await state.update_data(failed_attempts=failed_attempts)
+
+            if failed_attempts >= 3:
+                await state.clear()
+                await message.answer("❌ Три неудачные попытки. Пожалуйста, начните процесс заново.")
+                return
+
             await message.answer("❌ Введите положительное число.")
             return
+
         await state.update_data(reward_value=str(bonus_points))
         await message.answer("⏳ На сколько выдавать (в часах)?")
         await state.set_state(PromoCreation.waiting_for_duration)
@@ -138,24 +172,47 @@ async def select_homyak(callback_query: CallbackQuery, state: FSMContext):
 
 @router.message(PromoCreation.waiting_for_duration)
 async def process_duration(message: Message, state: FSMContext):
+    attempts = await state.get_data()
+    failed_attempts = attempts.get("failed_attempts", 0)
+
     try:
         hours = int(message.text.strip())
         if hours <= 0:
             raise ValueError
     except ValueError:
+        failed_attempts += 1
+        await state.update_data(failed_attempts=failed_attempts)
+
+        if failed_attempts >= 3:
+            await state.clear()
+            await message.answer("❌ Три неудачные попытки. Пожалуйста, начните процесс заново.")
+            return
+
         await message.answer("❌ Введите положительное число часов.")
         return
+
     await state.update_data(duration=hours * 60)
     await message.answer("🔢 Сколько активаций максимум?")
     await state.set_state(PromoCreation.waiting_for_max_uses)
 
 @router.message(PromoCreation.waiting_for_max_uses)
 async def process_max_uses(message: Message, state: FSMContext):
+    attempts = await state.get_data()
+    failed_attempts = attempts.get("failed_attempts", 0)
+
     try:
         max_uses = int(message.text.strip())
         if max_uses <= 0:
             raise ValueError
     except ValueError:
+        failed_attempts += 1
+        await state.update_data(failed_attempts=failed_attempts)
+
+        if failed_attempts >= 3:
+            await state.clear()
+            await message.answer("❌ Три неудачные попытки. Пожалуйста, начните процесс заново.")
+            return
+
         await message.answer("❌ Введите положительное число.")
         return
 
