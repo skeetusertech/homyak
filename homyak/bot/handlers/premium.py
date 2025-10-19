@@ -14,6 +14,7 @@ import logging
 logger = logging.getLogger(__name__)
 router = Router()
 
+
 _bot_instance: Bot | None = None
 
 def set_bot_instance(bot: Bot):
@@ -70,14 +71,30 @@ global_bot = None
 
 @router.message(Command("premium"))
 async def cmd_premium(message: Message):
+    if message.chat.type != "private":
+        bot_link = "https://t.me/homyakadventbot?start=premium"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Перейти в бота", url=bot_link)]
+        ])
+        await message.answer(
+            "❌ Эта команда доступна только в личных сообщениях с ботом. ",
+            reply_markup=keyboard
+        )
+        return
+
+    await show_premium_menu(message)
+
+async def show_premium_menu(message: Message):
+
+    user_id = message.from_user.id
     from ..database.premium import get_premium
-    premium_info = await get_premium(message.from_user.id)
-    
+    premium_info = await get_premium(user_id)
+
     if premium_info and premium_info.get("is_lifetime"):
         description = (
             "👑 У вас активен Premium (навсегда)!\n\n"
             "💵 Ваши привилегии:\n"
-            "КД 12 часов вместо 24\n"
+            "КД 5 часов вместо 7\n"
             "+5% шанс на редкие хомяки\n"
             "+1000 очков за каждого хомяка"
         )
@@ -92,7 +109,7 @@ async def cmd_premium(message: Message):
 
     description = (
         f"{status_text}"
-        "🌟Premium-подписка даёт:\n"
+        "🌟 Premium-подписка даёт:\n"
         "КД 12 часов вместо 24\n"
         "+5% шанс на редкие хомяки\n"
         "+1000 очков за каждого хомяка\n\n"
@@ -101,13 +118,18 @@ async def cmd_premium(message: Message):
 
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="⭐️ Telegram Stars", callback_data="pay_stars"),
-        InlineKeyboardButton(text="💰 CryptoBot", callback_data="pay_cryptobot")
+        InlineKeyboardButton(text="⭐️ Telegram Stars", callback_data=f"pay_stars_{user_id}"),
+        InlineKeyboardButton(text="💰 CryptoBot", callback_data=f"pay_cryptobot_{user_id}")
     )
     await message.answer(description, reply_markup=builder.as_markup(), parse_mode="HTML")
 
-@router.callback_query(lambda c: c.data == "pay_stars")
+@router.callback_query(F.data.startswith("pay_stars_"))
 async def pay_stars(callback_query: CallbackQuery):
+    target_user_id = int(callback_query.data.split("_")[-1])
+    if callback_query.from_user.id != target_user_id:
+        await callback_query.answer("❌ Это не ваши кнопки.", show_alert=True)
+        return 
+    
     builder = InlineKeyboardBuilder()
     for plan_key in PRICE_PLANS.keys():
         stars = PRICE_PLANS[plan_key]
@@ -120,12 +142,13 @@ async def pay_stars(callback_query: CallbackQuery):
     await callback_query.message.edit_text("🌟 Выберите тариф:", reply_markup=builder.as_markup())
     await callback_query.answer()
 
-@router.callback_query(lambda c: c.data.startswith("stars_"))
+@router.callback_query(F.data.startswith("stars_"))
 async def stars_plan_selected(callback_query: CallbackQuery):
     plan = "_".join(callback_query.data.split("_")[1:])
     if plan not in PRICE_PLANS:
         await callback_query.answer("❌ Неверный тариф", show_alert=True)
         return
+    
 
     amount = PRICE_PLANS[plan]
     display_name = format_display_name(plan)
@@ -191,8 +214,12 @@ async def on_successful_payment(message: Message):
     except Exception as e:
         logger.error(f"cant send log 194 premium: {e}")
 
-@router.callback_query(lambda c: c.data == "pay_cryptobot")
+@router.callback_query(F.data.startswith("pay_cryptobot_"))
 async def pay_cryptobot_menu(callback_query: CallbackQuery):
+    target_user_id = int(callback_query.data.split("_")[-1])
+    if callback_query.from_user.id != target_user_id:
+        await callback_query.answer("❌ Это не ваши кнопки.", show_alert=True)
+        return 
 
     builder = InlineKeyboardBuilder()
     CRYPTO_PRICES = {"1_month": 0.2, "3_months": 0.4, "6_months": 0.6, "1_year": 1.1, "lifetime": 2.5}
@@ -207,7 +234,7 @@ async def pay_cryptobot_menu(callback_query: CallbackQuery):
     await callback_query.message.edit_text("💰 Выберите премиум для оплаты в USDT:", reply_markup=builder.as_markup())
     await callback_query.answer()
 
-@router.callback_query(lambda c: c.data.startswith("crypto_"))
+@router.callback_query(F.data.startswith("crypto_"))
 async def crypto_plan_selected(callback_query: CallbackQuery):
     if not CRYPTO_BOT_TOKEN:
         await callback_query.answer("cb non work", show_alert=True)
@@ -256,7 +283,7 @@ async def crypto_plan_selected(callback_query: CallbackQuery):
         logger.error(f"cb ошибка 261 premium: {e}")
         await callback_query.message.answer("❌ Ошибка создания оплаты.")
 
-@router.callback_query(lambda c: c.data.startswith("check_crypto_"))
+@router.callback_query(F.data.startswith("check_crypto_"))
 async def check_crypto_payment(callback_query: CallbackQuery):
     parts = callback_query.data.split("_")
     if len(parts) < 5:

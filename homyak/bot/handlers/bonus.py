@@ -1,4 +1,3 @@
-# bot/handlers/bonus.py
 from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -78,9 +77,9 @@ async def check_bonus(callback_query):
             await callback_query.bot.send_message(ADMIN_CHAT_ID, log_bonus, parse_mode="HTML")
 
             await callback_query.message.edit_text(
-                "✅ Бонусы активированы!"
-                "Вам было выдано (навсегда):"
-                "Кд 18 часов вместо 24 часа(При наличии Premium - 10 часов вместо 12)"
+                "✅ Бонусы активированы!\n"
+                "Вам было выдано (навсегда):\n\n"
+                "Кд 6 часов вместо 7 часа(При наличии Premium - 4 часов вместо 5)\n"
                 "+500 очков с каждого хомяка(При наличии Premium - +700 очков)"
             )
         else:

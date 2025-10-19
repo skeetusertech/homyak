@@ -25,6 +25,11 @@ async def cmd_start(message: Message):
         from .bonus import show_bonus_menu
         await show_bonus_menu(message)
         return
+    
+    if payload == "premium":
+        from .premium import show_premium_menu
+        await show_premium_menu(message)
+        return
 
     premium_info = await get_premium(user.id)
     premium_text = ""
