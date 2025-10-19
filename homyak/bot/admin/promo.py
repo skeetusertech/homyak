@@ -30,11 +30,6 @@ async def cmd_createpromo(message: Message, state: FSMContext):
 @router.message(PromoCreation.waiting_for_code)
 async def process_code(message: Message, state: FSMContext):
     code = message.text.strip()
-    norm = code.upper()
-    if await promo_exists(norm):
-        await message.answer("❌ Такой промокод уже существует. Введите другой:")
-        return
-    await state.update_data(promo_code=norm)
     if not code:
         await message.answer("❌ Промокод не может быть пустым.")
         return

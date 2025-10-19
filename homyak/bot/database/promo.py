@@ -1,4 +1,7 @@
+from typing import Any, Dict, Optional, Tuple
+from datetime import datetime
 import aiosqlite
+
 from ..config import PROMO_DB_PATH
 
 async def init_db():
@@ -26,60 +29,103 @@ async def init_db():
         """)
         await db.commit()
 
-async def create_promo(code: str, creator_id: int, reward_type: int, reward_value: str, duration: int, max_uses: int):
+async def create_promo(*, code, creator_id, reward_type, reward_value, duration, max_uses) -> bool:
+    norm_code = code.strip().upper()
     db_path = str(PROMO_DB_PATH)
     async with aiosqlite.connect(db_path) as db:
-        await db.execute("""
-            INSERT INTO promocodes 
-            (code, creator_id, reward_type, reward_value, duration, max_uses)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (code, creator_id, reward_type, reward_value, duration, max_uses))
-        await db.commit()
+        try:
+            await db.execute("""
+                INSERT INTO promocodes (code, creator_id, reward_type, reward_value, duration, max_uses)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(code) DO NOTHING
+            """, (norm_code, creator_id, reward_type, reward_value, duration, max_uses))
+            await db.commit()
+            cur = await db.execute("SELECT changes()")
+            (changes,) = await cur.fetchone()
+            return changes == 1
+        except aiosqlite.IntegrityError:
+            return False
 
-async def get_promo(code: str):
+async def get_promo(code: str) -> Optional[Dict[str, Any]]:
     db_path = str(PROMO_DB_PATH)
     async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT * FROM promocodes WHERE code = ?", (code,))
         row = await cursor.fetchone()
-        if row:
-            return {
-                "code": row[0],
-                "creator_id": row[1],
-                "reward_type": row[2],
-                "reward_value": row[3],
-                "duration": row[4],
-                "max_uses": row[5],
-                "used_count": row[6]
-            }
-        return None
+        return dict(row) if row else None
+    
+async def create_or_update_promo(
+    db: aiosqlite.Connection,
+    code: str,
+    reward_type: str,
+    reward_value: int,
+    max_uses: Optional[int],
+    expires_at: Optional[datetime],
+) -> None:
+    await db.execute(
+        """
+        INSERT INTO promocodes (code, reward_type, reward_value, max_uses, used, expires_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT(code) DO UPDATE SET
+            reward_type = excluded.reward_type,
+            reward_value = excluded.reward_value,
+            max_uses    = excluded.max_uses,
+            expires_at  = excluded.expires_at,
+            updated_at  = CURRENT_TIMESTAMP
+        """,
+        (code, reward_type, reward_value, max_uses, expires_at),
+    )
+    await db.commit()
 
-async def use_promo(code: str):
+
+async def redeem_promo(user_id: int, promo_code: str) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Attempt to redeem a promo code for a user.
+
+    Returns a tuple of (promo, status) where status is one of
+    "success", "already_used", "exhausted" or "not_found".
+    """
+
     db_path = str(PROMO_DB_PATH)
     async with aiosqlite.connect(db_path) as db:
-        await db.execute("UPDATE promocodes SET used_count = used_count + 1 WHERE code = ?", (code,))
-        await db.commit()
+        db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
 
-async def is_promo_valid(code: str) -> bool:
-    promo = await get_promo(code)
-    if not promo:
-        return False
-    return promo["used_count"] < promo["max_uses"]
+        cursor = await db.execute(
+            "SELECT * FROM promocodes WHERE code = ?",
+            (promo_code,)
+        )
+        row = await cursor.fetchone()
 
+        if row is None:
+            await db.rollback()
+            return None, "not_found"
 
-async def has_user_used_promo(user_id: int, promo_code: str) -> bool:
-    db_path = str(PROMO_DB_PATH)
-    async with aiosqlite.connect(db_path) as db:
+        promo = dict(row)
+
+        if promo["used_count"] >= promo["max_uses"]:
+            await db.rollback()
+            return promo, "exhausted"
+
         cursor = await db.execute(
             "SELECT 1 FROM promo_uses WHERE user_id = ? AND promo_code = ?",
             (user_id, promo_code)
         )
-        return await cursor.fetchone() is not None
 
-async def record_promo_use(user_id: int, promo_code: str):
-    db_path = str(PROMO_DB_PATH)
-    async with aiosqlite.connect(db_path) as db:
+        if await cursor.fetchone():
+            await db.rollback()
+            return promo, "already_used"
+
         await db.execute(
-            "INSERT OR IGNORE INTO promo_uses (user_id, promo_code) VALUES (?, ?)",
+            "UPDATE promocodes SET used_count = used_count + 1 WHERE code = ?",
+            (promo_code,)
+        )
+        await db.execute(
+            "INSERT INTO promo_uses (user_id, promo_code) VALUES (?, ?)",
             (user_id, promo_code)
         )
+
+        promo["used_count"] += 1
+
         await db.commit()
+
+        return promo, "success"
